@@ -85,10 +85,10 @@ else
 cd $KERNEL_DIR/build
 rm *.zip > /dev/null 2>&1
 echo -e "$yellow\n Build succesful, generating flashable zip now \n $white"
-zip -r Radon-Kenzo-Mi-Mm.zip * > /dev/null
+zip -r Radon-Kenzo-Mi-Mm_v6.1_jackmod.zip * > /dev/null
 End=$(date +"%s")
 Diff=$(($End - $Start))
-echo -e "$yellow $KERNEL_DIR/build/Radon-Kenzo-Mi-Mm.zip \n$white"
+echo -e "$yellow $KERNEL_DIR/build/Radon-Kenzo-Mi-Mm_v6.1_jackmod.zip \n$white"
 echo -e "$gre << Build completed in $(($Diff / 60)) minutes and $(($Diff % 60)) seconds, variant($goodix$qc) >> \n $white"
 fi
 cd $KERNEL_DIR
