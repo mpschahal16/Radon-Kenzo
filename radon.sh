@@ -35,7 +35,7 @@ Start=$(date +"%s")
 DTBTOOL=$KERNEL_DIR/dtbTool
 cd $KERNEL_DIR
 export ARCH=arm64
-export CROSS_COMPILE="/home/$USER/toolchain/aarch64_4.9_6.0.1_r80/bin/aarch64-linux-android-"
+export CROSS_COMPILE="/home/manpreet/kernel_dev/mmcomp/bin/aarch64-linux-android-"
 STRIP="/home/$USER/toolchain/aarch64_4.9_6.0.1_r80/bin/aarch64-linux-android-strip"
 cp $KERNEL_DIR/build/modules/wlan1.ko ~/wlan1.ko > /dev/null 2>&1
 cp $KERNEL_DIR/build/modules/wlan2.ko ~/wlan2.ko > /dev/null 2>&1
@@ -56,8 +56,6 @@ elif [ $qc == 1 ]; then
 git apply -R qc.patch > /dev/null 2>&1
 fi
 make cyanogenmod_kenzo_defconfig
-export KBUILD_BUILD_HOST="lenovo"
-export KBUILD_BUILD_USER="umang"
 make -j4
 time=$(date +"%d-%m-%y-%T")
 $DTBTOOL -2 -o $KERNEL_DIR/arch/arm64/boot/dt.img -s 2048 -p $KERNEL_DIR/scripts/dtc/ $KERNEL_DIR/arch/arm/boot/dts/
