@@ -33,7 +33,7 @@ Start=$(date +"%s")
 DTBTOOL=$KERNEL_DIR/dtbTool
 cd $KERNEL_DIR
 export ARCH=arm64
-export CROSS_COMPILE="/home/$USER/kernel/toolchains/android-8.1.0_r2/bin/aarch64-linux-android-"
+export CROSS_COMPILE="/home/manpreet/kernel_dev/Radon/oreocomp/bin/aarch64-linux-android-"
 echo -e "$yellow Running make clean before compiling \n$white"
 make clean > /dev/null
 if [ $qc == 2 ]; then
@@ -43,9 +43,7 @@ elif [ $qc == 1 ]; then
 git apply -R qc.patch > /dev/null 2>&1
 fi
 make lineageos_kenzo_defconfig
-export KBUILD_BUILD_HOST="ryzen"
-export KBUILD_BUILD_USER="umang"
-make -j16
+make -j4
 time=$(date +"%d-%m-%y-%T")
 $DTBTOOL -2 -o $KERNEL_DIR/arch/arm64/boot/dt.img -s 2048 -p $KERNEL_DIR/scripts/dtc/ $KERNEL_DIR/arch/arm/boot/dts/
 if ([ $qc -eq 1 ]); then
@@ -62,10 +60,10 @@ else
 cd $KERNEL_DIR/build
 rm *.zip > /dev/null 2>&1
 echo -e "$yellow\n Build succesful, generating flashable zip now \n $white"
-zip -r Radon-Kenzo-Cm-Or.zip * > /dev/null
+zip -r Radon-Kenzo-Cm-Or-jack_mod.zip * > /dev/null
 End=$(date +"%s")
 Diff=$(($End - $Start))
-echo -e "$yellow $KERNEL_DIR/build/Radon-Kenzo-Cm-Or.zip \n$white"
+echo -e "$yellow $KERNEL_DIR/build/Radon-Kenzo-Cm-Or-jack_mod.zip \n$white"
 echo -e "$gre << Build completed in $(($Diff / 60)) minutes and $(($Diff % 60)) seconds, variant($qc) >> \n $white"
 fi
 cd $KERNEL_DIR
