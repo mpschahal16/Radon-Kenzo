@@ -53,6 +53,12 @@ static void audio_effects_init_pp(struct audio_client *ac)
 		pr_err("%s: audio client null to init pp\n", __func__);
 		return;
 	}
+	ret = q6asm_set_softvolume_v2(ac, &softvol,
+				      SOFT_VOLUME_INSTANCE_1);
+	if (ret < 0)
+		pr_err("%s: Send SoftVolume Param failed ret=%d\n",
+			__func__, ret);
+
 	switch (ac->topology) {
 	case ASM_STREAM_POSTPROC_TOPO_ID_HPX_MASTER:
 
@@ -86,6 +92,7 @@ static void audio_effects_deinit_pp(struct audio_client *ac)
 		pr_err("%s: audio client null to deinit pp\n", __func__);
 		return;
 	}
+
 	switch (ac->topology) {
 	case ASM_STREAM_POSTPROC_TOPO_ID_HPX_MASTER:
 		msm_dts_eagle_deinit_master_module(ac);
@@ -412,6 +419,7 @@ static long audio_effects_set_pp_param(struct q6audio_effects *effects,
 			      &(effects->audio_effects.topo_switch_vol),
 			      (long *)&values[1], SOFT_VOLUME_INSTANCE_2);
 		break;
+
 	case DTS_EAGLE_MODULE_ENABLE:
 		pr_debug("%s: DTS_EAGLE_MODULE_ENABLE\n", __func__);
 		if (msm_audio_effects_is_effmodule_supp_in_top(

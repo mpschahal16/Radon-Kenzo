@@ -197,6 +197,7 @@ static struct param_outband _po_NT;
 #define SEC_BLOB_MAX_CNT 10
 #define SEC_BLOB_MAX_SIZE 0x4004 /*extra 4 for size*/
 static char *_sec_blob[SEC_BLOB_MAX_CNT];
+struct mutex _sec_lock;
 
 /* multi-copp support */
 static int _cidx[AFE_MAX_PORTS] = {-1};
@@ -213,8 +214,6 @@ static const s32 _log10_10_inv_x20 = 0x0008af84;
 
 /* hpx master control */
 static u32 _is_hpx_enabled;
-/* flag to identify if slim be to be used */
-static u32 _use_slim_be;
 
 static void _volume_cmds_free(void)
 {
@@ -273,7 +272,6 @@ static u32 _get_dev_mask_for_pid(int pid)
 {
 	switch (pid) {
 	case SLIMBUS_0_RX:
-	case AFE_PORT_ID_PRIMARY_MI2S_RX:
 		return (1 << AUDIO_DEVICE_OUT_EARPIECE) |
 			(1 << AUDIO_DEVICE_OUT_SPEAKER) |
 			(1 << AUDIO_DEVICE_OUT_WIRED_HEADSET) |
@@ -312,11 +310,7 @@ static int _get_pid_from_dev(u32 device)
 	    device & (1 << AUDIO_DEVICE_OUT_WIRED_HEADPHONE) ||
 	    device & (1 << AUDIO_DEVICE_OUT_ANC_HEADSET) ||
 	    device & (1 << AUDIO_DEVICE_OUT_ANC_HEADPHONE)) {
-		if (_use_slim_be) {
-			return SLIMBUS_0_RX;
-		} else {
-			return AFE_PORT_ID_PRIMARY_MI2S_RX;
-		}
+		return SLIMBUS_0_RX;
 	} else if (device & (1 << AUDIO_DEVICE_OUT_BLUETOOTH_SCO) ||
 		   device & (1 << AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET) ||
 		   device & (1 << AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT)) {
@@ -611,8 +605,7 @@ static int _enable_post_put_control(struct snd_kcontrol *kcontrol,
 		msm_pcm_routing_get_bedai_info(be_index, &msm_bedai);
 		port_id = msm_bedai.port_id;
 		if (!(((port_id == SLIMBUS_0_RX) ||
-		      (port_id == RT_PROXY_PORT_001_RX) ||
-			(port_id == AFE_PORT_ID_PRIMARY_MI2S_RX)) &&
+		      (port_id == RT_PROXY_PORT_001_RX)) &&
 		      msm_bedai.active))
 			continue;
 		for (idx = 0; idx < MAX_COPPS_PER_PORT; idx++) {
@@ -634,25 +627,6 @@ static const struct snd_kcontrol_new _hpx_enabled_controls[] = {
 	_enable_post_get_control, _enable_post_put_control)
 };
 
-static int _be_post_get_control(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	ucontrol->value.integer.value[0] = _use_slim_be;
-	return 0;
-}
-
-static int _be_post_put_control(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	_use_slim_be = ucontrol->value.integer.value[0];
-	eagle_drv_dbg(" valuse of _use_slim_be == %d", _use_slim_be);
-	return 0;
-}
-
-static const struct snd_kcontrol_new _hpx_be_controls[] = {
-	SOC_SINGLE_EXT("Set HPX ActiveBe", SND_SOC_NOPM, 0, 1, 0,
-	_be_post_get_control, _be_post_put_control)
-};
 /**
  * msm_dts_ion_memmap() - helper function to map ION memory
  * @po_:	Out of band memory structure used as memory.
@@ -730,9 +704,6 @@ void msm_dts_eagle_add_controls(struct snd_soc_platform *platform)
 {
 	snd_soc_add_platform_controls(platform, _hpx_enabled_controls,
 				      ARRAY_SIZE(_hpx_enabled_controls));
-	snd_soc_add_platform_controls(platform, _hpx_be_controls,
-					ARRAY_SIZE(_hpx_be_controls));
-
 }
 
 /**
@@ -1269,15 +1240,18 @@ int msm_dts_eagle_ioctl(unsigned int cmd, unsigned long arg)
 				   __func__, target, SEC_BLOB_MAX_CNT);
 			return -EINVAL;
 		}
+		mutex_lock(&_sec_lock);
 		if (_sec_blob[target] == NULL) {
 			eagle_ioctl_err("%s: license index %u never initialized",
 				   __func__, target);
+			mutex_unlock(&_sec_lock);
 			return -EINVAL;
 		}
 		size = ((u32 *)_sec_blob[target])[0];
 		if ((size == 0) || (size > SEC_BLOB_MAX_SIZE)) {
 			eagle_ioctl_err("%s: license size %u for index %u invalid (min size is 1, max size is %u)",
 				   __func__, size, target, SEC_BLOB_MAX_SIZE);
+			mutex_unlock(&_sec_lock);
 			return -EINVAL;
 		}
 		if (size_only) {
@@ -1287,16 +1261,19 @@ int msm_dts_eagle_ioctl(unsigned int cmd, unsigned long arg)
 				 (void *)&size, sizeof(size))) {
 				eagle_ioctl_err("%s: error copying license size",
 						__func__);
+				mutex_unlock(&_sec_lock);
 				return -EFAULT;
 			}
 		} else if (copy_to_user((void *)(((char *)arg)+sizeof(target)),
 			   (void *)&(((s32 *)_sec_blob[target])[1]), size)) {
 			eagle_ioctl_err("%s: error copying license data",
 				__func__);
+			mutex_unlock(&_sec_lock);
 			return -EFAULT;
 		} else
 			eagle_ioctl_info("%s: license file %u bytes long from license index %u returned to user",
 				  __func__, size, target);
+		mutex_unlock(&_sec_lock);
 		break;
 	}
 	case DTS_EAGLE_IOCTL_SET_LICENSE: {
@@ -1314,26 +1291,27 @@ int msm_dts_eagle_ioctl(unsigned int cmd, unsigned long arg)
 				   __func__, target[0], SEC_BLOB_MAX_CNT-1);
 			return -EINVAL;
 		}
+		mutex_lock(&_sec_lock);
 		if (target[1] == 0) {
 			eagle_ioctl_dbg("%s: request to free license index %u",
 				 __func__, target[0]);
 			kfree(_sec_blob[target[0]]);
 			_sec_blob[target[0]] = NULL;
+			mutex_unlock(&_sec_lock);
 			break;
 		}
 		if ((target[1] == 0) || (target[1] >= SEC_BLOB_MAX_SIZE)) {
 			eagle_ioctl_err("%s: license size %u for index %u invalid (min size is 1, max size is %u)",
 				__func__, target[1], target[0],
 				SEC_BLOB_MAX_SIZE);
+			mutex_unlock(&_sec_lock);
 			return -EINVAL;
 		}
 		if (_sec_blob[target[0]] != NULL) {
-			if (((u32 *)_sec_blob[target[0]])[1] != target[1]) {
-				eagle_ioctl_dbg("%s: request new size for already allocated license index %u",
-					 __func__, target[0]);
-				kfree(_sec_blob[target[0]]);
-				_sec_blob[target[0]] = NULL;
-			}
+			eagle_ioctl_dbg("%s: reallocate already allocated license index %i",
+				 __func__, target[0]);
+			kfree(_sec_blob[target[0]]);
+			_sec_blob[target[0]] = NULL;
 		}
 		eagle_ioctl_dbg("%s: allocating %u bytes for license index %u",
 				__func__, target[1], target[0]);
@@ -1341,6 +1319,7 @@ int msm_dts_eagle_ioctl(unsigned int cmd, unsigned long arg)
 		if (!_sec_blob[target[0]]) {
 			eagle_ioctl_err("%s: error allocating license index %u (kzalloc failed on %u bytes)",
 					__func__, target[0], target[1]);
+			mutex_unlock(&_sec_lock);
 			return -ENOMEM;
 		}
 		((u32 *)_sec_blob[target[0]])[0] = target[1];
@@ -1353,10 +1332,12 @@ int msm_dts_eagle_ioctl(unsigned int cmd, unsigned long arg)
 					((char *)arg)+sizeof(target),
 					&(((u32 *)_sec_blob[target[0]])[1]),
 					target[1]);
+			mutex_unlock(&_sec_lock);
 			return -EFAULT;
 		} else
 			eagle_ioctl_info("%s: license file %u bytes long copied to index license index %u",
 				  __func__, target[1], target[0]);
+		mutex_unlock(&_sec_lock);
 		break;
 	}
 	case DTS_EAGLE_IOCTL_SEND_LICENSE: {
@@ -1374,10 +1355,12 @@ int msm_dts_eagle_ioctl(unsigned int cmd, unsigned long arg)
 					__func__, target, SEC_BLOB_MAX_CNT-1);
 			return -EINVAL;
 		}
+		mutex_lock(&_sec_lock);
 		if (!_sec_blob[target] ||
 		    ((u32 *)_sec_blob[target])[0] == 0) {
 			eagle_ioctl_err("%s: license index %u is invalid",
 				__func__, target);
+			mutex_unlock(&_sec_lock);
 			return -EINVAL;
 		}
 		if (core_dts_eagle_set(((s32 *)_sec_blob[target])[0],
@@ -1387,6 +1370,7 @@ int msm_dts_eagle_ioctl(unsigned int cmd, unsigned long arg)
 		else
 			eagle_ioctl_info("%s: core_dts_eagle_set succeeded with id = %u",
 				 __func__, target);
+		mutex_unlock(&_sec_lock);
 		break;
 	}
 	case DTS_EAGLE_IOCTL_SET_VOLUME_COMMANDS: {
@@ -1632,6 +1616,7 @@ int msm_dts_eagle_pcm_new(struct snd_soc_pcm_runtime *runtime)
 		_init_cb_descs();
 		_reg_ion_mem();
 	}
+	mutex_init(&_sec_lock);
 	return 0;
 }
 
@@ -1648,6 +1633,7 @@ void msm_dts_eagle_pcm_free(struct snd_pcm *pcm)
 	if (!--_ref_cnt)
 		_unreg_ion_mem();
 	vfree(_depc);
+	mutex_destroy(&_sec_lock);
 }
 
 MODULE_DESCRIPTION("DTS EAGLE platform driver");

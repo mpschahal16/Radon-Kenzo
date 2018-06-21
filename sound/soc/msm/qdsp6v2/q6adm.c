@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, 2016, 2017 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -311,7 +311,7 @@ int adm_dts_eagle_set(int port_id, int copp_idx, int param_id,
 	admp.hdr.token = p_idx << 16 | copp_idx;
 	admp.hdr.opcode = ADM_CMD_SET_PP_PARAMS_V5;
 	admp.payload_addr_lsw = lower_32_bits(this_adm.outband_memmap.paddr);
-	admp.payload_addr_msw = populate_upper_32_bits(
+	admp.payload_addr_msw = msm_audio_populate_upper_32_bits(
 						this_adm.outband_memmap.paddr);
 	admp.mem_map_handle = atomic_read(&this_adm.mem_map_handles[
 					  ADM_DTS_EAGLE]);
@@ -321,8 +321,7 @@ int adm_dts_eagle_set(int port_id, int copp_idx, int param_id,
 			__func__, admp.hdr.dest_port,
 			admp.payload_size, AUDPROC_MODULE_ID_DTS_HPX_POSTMIX,
 			param_id);
-	atomic_set(&this_adm.copp.stat[p_idx][copp_idx], 0);
-	atomic_set(&this_adm.copp.cmd_err_code[p_idx][copp_idx], 0);
+	atomic_set(&this_adm.copp.stat[p_idx][copp_idx], -1);
 	ret = apr_send_pkt(this_adm.apr, (uint32_t *)&admp);
 	if (ret < 0) {
 		pr_err("DTS_EAGLE_ADM: %s - ADM enable for port %d failed\n",
@@ -331,20 +330,21 @@ int adm_dts_eagle_set(int port_id, int copp_idx, int param_id,
 		goto fail_cmd;
 	}
 	ret = wait_event_timeout(this_adm.copp.wait[p_idx][copp_idx],
-			atomic_read(&this_adm.copp.stat[p_idx][copp_idx]),
+			atomic_read(&this_adm.copp.stat
+			[p_idx][copp_idx]) >= 0,
 			msecs_to_jiffies(TIMEOUT_MS));
 	if (!ret) {
 		pr_err("DTS_EAGLE_ADM: %s - set params timed out port = %d\n",
 			__func__, port_id);
 		ret = -EINVAL;
-	} else if (atomic_read(&this_adm.copp.cmd_err_code
+	} else if (atomic_read(&this_adm.copp.stat
 				[p_idx][copp_idx]) > 0) {
 		pr_err("%s: DSP returned error[%s]\n",
 				__func__, adsp_err_get_err_str(
-				atomic_read(&this_adm.copp.cmd_err_code
+				atomic_read(&this_adm.copp.stat
 				[p_idx][copp_idx])));
 		ret = adsp_err_get_lnx_err_code(
-				atomic_read(&this_adm.copp.cmd_err_code
+				atomic_read(&this_adm.copp.stat
 				[p_idx][copp_idx]));
 	} else {
 		ret = 0;
@@ -421,7 +421,7 @@ int adm_dts_eagle_get(int port_id, int copp_idx, int param_id,
 	admp.data_payload_addr_lsw =
 				lower_32_bits(this_adm.outband_memmap.paddr);
 	admp.data_payload_addr_msw =
-				populate_upper_32_bits(
+				msm_audio_populate_upper_32_bits(
 						this_adm.outband_memmap.paddr);
 	admp.mem_map_handle = atomic_read(&this_adm.mem_map_handles[
 					  ADM_DTS_EAGLE]);
@@ -430,8 +430,7 @@ int adm_dts_eagle_get(int port_id, int copp_idx, int param_id,
 	admp.param_max_size = size + sizeof(struct adm_param_data_v5);
 	admp.reserved = 0;
 
-	atomic_set(&this_adm.copp.stat[p_idx][copp_idx], 0);
-	atomic_set(&this_adm.copp.cmd_err_code[p_idx][copp_idx], 0);
+	atomic_set(&this_adm.copp.stat[p_idx][copp_idx], -1);
 
 	ret = apr_send_pkt(this_adm.apr, (uint32_t *)&admp);
 	if (ret < 0) {
@@ -441,21 +440,22 @@ int adm_dts_eagle_get(int port_id, int copp_idx, int param_id,
 		goto fail_cmd;
 	}
 	ret = wait_event_timeout(this_adm.copp.wait[p_idx][copp_idx],
-			atomic_read(&this_adm.copp.stat[p_idx][copp_idx]),
+			atomic_read(&this_adm.copp.stat
+			[p_idx][copp_idx]) >= 0,
 			msecs_to_jiffies(TIMEOUT_MS));
 	if (!ret) {
 		pr_err("DTS_EAGLE_ADM: %s - EAGLE get params timed out port = %d\n",
 			__func__, port_id);
 		ret = -EINVAL;
 		goto fail_cmd;
-	} else if (atomic_read(&this_adm.copp.cmd_err_code
+	} else if (atomic_read(&this_adm.copp.stat
 				[p_idx][copp_idx]) > 0) {
 		pr_err("%s: DSP returned error[%s]\n",
 				__func__, adsp_err_get_err_str(
-				atomic_read(&this_adm.copp.cmd_err_code
+				atomic_read(&this_adm.copp.stat
 				[p_idx][copp_idx])));
 		ret = adsp_err_get_lnx_err_code(
-				atomic_read(&this_adm.copp.cmd_err_code
+				atomic_read(&this_adm.copp.stat
 					[p_idx][copp_idx]));
 		goto fail_cmd;
 	}
@@ -760,7 +760,7 @@ int adm_set_stereo_to_custom_stereo(int port_id, int copp_idx,
 	adm_params->hdr.dest_svc = APR_SVC_ADM;
 	adm_params->hdr.dest_domain = APR_DOMAIN_ADSP;
 	adm_params->hdr.dest_port = 0; /* Ignored */;
-	adm_params->hdr.token = 0;
+	adm_params->hdr.token = port_idx << 16 | copp_idx;
 	adm_params->hdr.opcode = ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V5;
 	adm_params->payload_addr_lsw = 0;
 	adm_params->payload_addr_msw = 0;
@@ -2298,8 +2298,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		flags = ADM_LOW_LATENCY_DEVICE_SESSION;
 		if ((topology == DOLBY_ADM_COPP_TOPOLOGY_ID) ||
 		    (topology == DS2_ADM_COPP_TOPOLOGY_ID) ||
-		    (topology == SRS_TRUMEDIA_TOPOLOGY_ID) ||
-		    (topology == ADM_CMD_COPP_OPEN_TOPOLOGY_ID_DTS_HPX))
+		    (topology == SRS_TRUMEDIA_TOPOLOGY_ID))
 			topology = DEFAULT_COPP_TOPOLOGY;
 	} else {
 		if (path == ADM_PATH_COMPRESSED_RX)
