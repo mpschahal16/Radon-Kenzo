@@ -74,6 +74,7 @@ int wcd_fake_removal_min_period_ms = 100;
 int fake_rem_retry_attempts = 10;
 int wcd_mbhc_spl_hs_cnt = 1;
 int wcd_mbhc_btn_press_compl_timeout_ms = 50;
+int max_imped = 60000;
 module_param_named(hs_detect_plug_time_ms, hs_detect_plug_time_ms, int, 0664);
 module_param_named(mbhc_button_press_threshold_min_ms, mbhc_button_press_threshold_min, int, 0664);
 module_param_named(wcd_fake_removal_min_period_ms, wcd_fake_removal_min_period_ms, int, 0664);
@@ -730,7 +731,6 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				pr_debug("%s: Marking jack type as SND_JACK_LINEOUT\n",
 				__func__);
 			}
-		}
 		}
 		else {
 		if (mbhc->impedance_detect &&
