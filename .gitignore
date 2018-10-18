@@ -42,6 +42,7 @@ modules.builtin
 /vmlinux
 /vmlinuz
 /System.map
+
 /Module.markers
 /Module.symvers
 
@@ -49,7 +50,6 @@ modules.builtin
 # Debian directory (make deb-pkg)
 #
 /debian/
-
 #
 # git files that we don't want to ignore even it they are dot-files
 #

@@ -35,7 +35,7 @@ Start=$(date +"%s")
 DTBTOOL=$KERNEL_DIR/dtbTool
 cd $KERNEL_DIR
 export ARCH=arm64
-export CROSS_COMPILE="/home/manpreet/kernel_dev/mmcomp/bin/aarch64-linux-android-"
+export CROSS_COMPILE="/home/manpreet/kernel/asus/compiler/aarch64/bin/aarch64-linux-android-"
 STRIP="/home/$USER/toolchain/aarch64_4.9_6.0.1_r80/bin/aarch64-linux-android-strip"
 cp $KERNEL_DIR/build/modules/wlan1.ko ~/wlan1.ko > /dev/null 2>&1
 cp $KERNEL_DIR/build/modules/wlan2.ko ~/wlan2.ko > /dev/null 2>&1
